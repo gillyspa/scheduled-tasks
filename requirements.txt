@@ -1,1 +1,4 @@
-pandas
+os
+smtplib
+requests
+from email.message import EmailMessage
