@@ -1,0 +1,77 @@
+# importo libreria necessaria per le API request (da installare)
+import requests
+import os
+import smtplib
+import requests
+from email.message import EmailMessage
+# importo la libreria per l'invio dei sms con twilio
+# variabili d'accesso Twilio:
+my_api_key = os.environ.get("my_api_key")
+# variabili per mail:
+mail_to =  os.environ.get("mail_to")
+email_gmail = os.environ.get("email_gmail")
+pwd_gmail = os.environ.get("pwd_gmail")
+smtp_gmail = "smtp.gmail.com"
+
+
+# latitudine e longitudine d'interesse:
+MY_LAT = 53.480759
+MY_LONG = -2.242631
+# MY_LAT = 46.127439
+# MY_LONG = 12.230661
+
+
+print(my_api_key)
+#OPEN_WEATHER_EP = "https://api.openweathermap.org/data/2.5/weather" #?lat={lat}&lon={lon}&appid={API key}
+FORECAST_WEATHER_EP = "https://api.openweathermap.org/data/2.5/forecast" #?lat={lat}&lon={lon}&appid={API key}
+
+# link diretto all'endpoint già formattato:
+# https://api.openweathermap.org/data/2.5/weather?lat=46.127439&lon=12.230661&appid=3d9a1b7077f5c100450506aea1cad31b
+# https://api.openweathermap.org/data/2.5/forecast?lat=46.127439&lon=12.230661&appid=3d9a1b7077f5c100450506aea1cad31b
+
+# parametri formattati come dictionary e passati nella richiesta API
+parameters = {
+    "lat": MY_LAT,
+    "lon": MY_LONG,
+    "appid": my_api_key,
+    "units": "metric",
+    "lang": "it",
+    "cnt": 4,           # limito i risultati alle prossime 12 ore
+    }
+
+# utilizzando il metodo get() posso ottenere i dati richiesti dall'ENDPOINT
+response = requests.get(url=FORECAST_WEATHER_EP, params=parameters) # l'Endpoint richiede necessariamente dei parametri
+response.raise_for_status() # al fine di intercettare i possibili errori nell'API request
+print(response)
+data = response.json()
+will_rain = False
+
+for prev in data["list"]:
+    id = prev["weather"][0]["id"]
+    if id < 700:
+        will_rain = True
+    descr = prev["weather"][0]["description"]
+    date_hour = prev["dt_txt"]
+    print(f"datetime = {date_hour}      id = {id}       description = {descr}")
+
+# verificando la documentazione https://openweathermap.org/weather-conditions#Weather-Condition-Codes-2
+# si può dedurre che i codici id inferiori a 700 indicano probabilità di precipitazioni
+# verifico se ci sono valori inferiori a 700
+if will_rain:
+    print("Bring an umbrella!")
+    # proseguo con la creazione e l'invio di una mail
+    # creo messaggio
+    msg = EmailMessage()
+    msg['Subject'] = "Weather Forecast by my App"
+    msg['From'] = email_gmail
+    msg['To'] = mail_to
+    msg.set_content("It will rain, bring an umbrella ☂️")
+    # send mail:
+    with smtplib.SMTP(smtp_gmail, 587) as connection_gmail:
+        connection_gmail.starttls()
+        connection_gmail.login(user=email_gmail, password=pwd_gmail)
+        connection_gmail.send_message(msg)
+        print("mail inviata")
+
+
+
