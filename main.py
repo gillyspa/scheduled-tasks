@@ -1,38 +1,74 @@
-# To run and test the code you need to update 4 places:
-# 1. Change MY_EMAIL/MY_PASSWORD to your own details.
-# 2. Go to your email provider and make it allow less secure apps.
-# 3. Update the SMTP ADDRESS to match your email provider.
-# 4. Update birthdays.csv to contain today's month and day.
-# See the solution video in the 100 Days of Python Course for explainations.
-
-
-from datetime import datetime
-import pandas
-import random
-import smtplib
+# importo libreria necessaria per le API request (da installare)
+import requests
 import os
+import smtplib
+import requests
+from email.message import EmailMessage
+# importo la libreria per l'invio dei sms con twilio
+# variabili d'accesso Twilio:
+my_api_key = os.environ.get("my_api_key")
+# variabili per mail:
+mail_to =  os.environ.get("mail_to")
+email_gmail = os.environ.get("email_gmail")
+pwd_gmail = os.environ.get("pwd_gmail")
+smtp_gmail = "smtp.gmail.com"
 
-# import os and use it to get the Github repository secrets
-MY_EMAIL = os.environ.get("MY_EMAIL")
-MY_PASSWORD = os.environ.get("MY_PASSWORD")
 
-today = datetime.now()
-today_tuple = (today.month, today.day)
+# latitudine e longitudine d'interesse:
+MY_LAT = 53.480759
+MY_LONG = -2.242631
+# MY_LAT = 46.127439
+# MY_LONG = 12.230661
 
-data = pandas.read_csv("birthdays.csv")
-birthdays_dict = {(data_row["month"], data_row["day"])                  : data_row for (index, data_row) in data.iterrows()}
-if today_tuple in birthdays_dict:
-    birthday_person = birthdays_dict[today_tuple]
-    file_path = f"letter_templates/letter_{random.randint(1, 3)}.txt"
-    with open(file_path) as letter_file:
-        contents = letter_file.read()
-        contents = contents.replace("[NAME]", birthday_person["name"])
 
-    with smtplib.SMTP("YOUR EMAIL PROVIDER SMTP SERVER ADDRESS") as connection:
-        connection.starttls()
-        connection.login(MY_EMAIL, MY_PASSWORD)
-        connection.sendmail(
-            from_addr=MY_EMAIL,
-            to_addrs=birthday_person["email"],
-            msg=f"Subject:Happy Birthday!\n\n{contents}"
-        )
+print(my_api_key)
+#OPEN_WEATHER_EP = "https://api.openweathermap.org/data/2.5/weather" #?lat={lat}&lon={lon}&appid={API key}
+FORECAST_WEATHER_EP = "https://api.openweathermap.org/data/2.5/forecast" #?lat={lat}&lon={lon}&appid={API key}
+
+# link diretto all'endpoint già formattato:
+# https://api.openweathermap.org/data/2.5/weather?lat=46.127439&lon=12.230661&appid=3d9a1b7077f5c100450506aea1cad31b
+# https://api.openweathermap.org/data/2.5/forecast?lat=46.127439&lon=12.230661&appid=3d9a1b7077f5c100450506aea1cad31b
+
+# parametri formattati come dictionary e passati nella richiesta API
+parameters = {
+    "lat": MY_LAT,
+    "lon": MY_LONG,
+    "appid": my_api_key,
+    "units": "metric",
+    "lang": "it",
+    "cnt": 4,           # limito i risultati alle prossime 12 ore
+    }
+
+# utilizzando il metodo get() posso ottenere i dati richiesti dall'ENDPOINT
+response = requests.get(url=FORECAST_WEATHER_EP, params=parameters) # l'Endpoint richiede necessariamente dei parametri
+response.raise_for_status() # al fine di intercettare i possibili errori nell'API request
+print(response)
+data = response.json()
+will_rain = False
+
+for prev in data["list"]:
+    id = prev["weather"][0]["id"]
+    if id < 700:
+        will_rain = True
+    descr = prev["weather"][0]["description"]
+    date_hour = prev["dt_txt"]
+    print(f"datetime = {date_hour}      id = {id}       description = {descr}")
+
+# verificando la documentazione https://openweathermap.org/weather-conditions#Weather-Condition-Codes-2
+# si può dedurre che i codici id inferiori a 700 indicano probabilità di precipitazioni
+# verifico se ci sono valori inferiori a 700
+if will_rain:
+    print("Bring an umbrella!")
+    # proseguo con la creazione e l'invio di una mail
+    # creo messaggio
+    msg = EmailMessage()
+    msg['Subject'] = "Weather Forecast by my App"
+    msg['From'] = email_gmail
+    msg['To'] = mail_to
+    msg.set_content("It will rain, bring an umbrella ☂️")
+    # send mail:
+    with smtplib.SMTP(smtp_gmail, 587) as connection_gmail:
+        connection_gmail.starttls()
+        connection_gmail.login(user=email_gmail, password=pwd_gmail)
+        connection_gmail.send_message(msg)
+        print("mail inviata")
